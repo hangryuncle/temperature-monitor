@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.database import get_connection
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
