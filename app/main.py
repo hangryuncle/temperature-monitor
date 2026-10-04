@@ -101,26 +101,34 @@ def create_measurement(measurement: MeasurementCreate):
         )
 
 @app.get("/measurements/pdr/{device_id}")
-def get_pdr(device_id: str):
+def get_pdr(
+    device_id: str,
+    start: datetime,
+    end: datetime,
+    expected_packets: int
+):
     conn = get_connection()
 
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT
-                COUNT(*) AS received,
-                MAX(packet_id) AS expected
+            SELECT DISTINCT packet_id
             FROM measurements
             WHERE device_id = %s
+              AND timestamp >= %s
+              AND timestamp < %s
               AND packet_id > 0
-        """, (device_id,))
+            ORDER BY packet_id
+        """, (device_id, start, end))
 
-        row = cur.fetchone()
+        rows = cur.fetchall()
 
     conn.close()
 
-    received = row[0]
-    expected = row[1] or 0
-    lost = expected - received
+    received_ids = [row[0] for row in rows]
+
+    received = len(received_ids)
+    expected = expected_packets
+    lost = max(expected - received, 0)
 
     pdr_percent = (
         (received / expected) * 100
@@ -130,8 +138,11 @@ def get_pdr(device_id: str):
 
     return {
         "device_id": device_id,
+        "start": start,
+        "end": end,
         "received": received,
         "expected": expected,
         "lost": lost,
         "pdr_percent": round(pdr_percent, 2),
-        }
+        "received_packet_ids": received_ids,
+    }
