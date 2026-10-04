@@ -1,10 +1,12 @@
-from datetime import datetime, timedelta
+
+from datetime import datetime
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.database import get_connection
 from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI()
 
@@ -19,13 +21,14 @@ app.add_middleware(
 
 class Measurement(BaseModel):
     id: int
-    packet_id: int  
+    packet_id: int
     device_id: str
     timestamp: datetime
     temperature: float
     humidity: float
     rssi: int | None = None
-    snr: float | None = None    
+    snr: float | None = None
+
 
 class MeasurementCreate(BaseModel):
     packet_id: int
@@ -35,6 +38,7 @@ class MeasurementCreate(BaseModel):
     humidity: float
     rssi: int | None = None
     snr: float | None = None
+
 
 @app.get("/")
 def home():
@@ -47,14 +51,22 @@ def get_measurements():
 
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT id, packet_id,device_id, timestamp, temperature, humidity, rssi, snr
+            SELECT
+                id,
+                packet_id,
+                device_id,
+                timestamp,
+                temperature,
+                humidity,
+                rssi,
+                snr
             FROM measurements
             ORDER BY timestamp DESC
         """)
 
         rows = cur.fetchall()
 
-    conn.close()    
+    conn.close()
 
     measurements = []
 
@@ -73,16 +85,34 @@ def get_measurements():
         )
 
     return measurements
+
+
 @app.post("/measurements", response_model=Measurement)
 def create_measurement(measurement: MeasurementCreate):
     conn = get_connection()
 
     with conn.cursor() as cur:
         cur.execute("""
-            INSERT INTO measurements (packet_id, device_id, timestamp, temperature, humidity, rssi, snr)
+            INSERT INTO measurements (
+                packet_id,
+                device_id,
+                timestamp,
+                temperature,
+                humidity,
+                rssi,
+                snr
+            )
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        """, (measurement.packet_id, measurement.device_id, measurement.timestamp, measurement.temperature, measurement.humidity,measurement.rssi, measurement.snr),)
+        """, (
+            measurement.packet_id,
+            measurement.device_id,
+            measurement.timestamp,
+            measurement.temperature,
+            measurement.humidity,
+            measurement.rssi,
+            measurement.snr
+        ))
 
         new_id = cur.fetchone()
 
@@ -90,28 +120,24 @@ def create_measurement(measurement: MeasurementCreate):
     conn.close()
 
     return Measurement(
-            id=new_id[0],
-            packet_id=measurement.packet_id,
-            device_id=measurement.device_id,
-            timestamp=measurement.timestamp,
-            temperature=measurement.temperature,            
-            humidity=measurement.humidity,
-            rssi=measurement.rssi,
-            snr=measurement.snr
-        )
-    
+        id=new_id[0],
+        packet_id=measurement.packet_id,
+        device_id=measurement.device_id,
+        timestamp=measurement.timestamp,
+        temperature=measurement.temperature,
+        humidity=measurement.humidity,
+        rssi=measurement.rssi,
+        snr=measurement.snr
+    )
+
+
 @app.get("/measurements/pdr/{device_id}")
 def get_pdr(
     device_id: str,
     start: datetime,
-    duration_minutes: int
+    end: datetime,
+    expected_packets: int
 ):
-    # Calculate the experiment end time
-    end = start + timedelta(minutes=duration_minutes)
-
-    # TX2 sends once per minute
-    expected = duration_minutes
-
     conn = get_connection()
 
     with conn.cursor() as cur:
@@ -133,6 +159,8 @@ def get_pdr(
 
     received = len(received_ids)
 
+    expected = expected_packets
+
     lost = max(expected - received, 0)
 
     pdr_percent = (
@@ -145,10 +173,10 @@ def get_pdr(
         "device_id": device_id,
         "start": start,
         "end": end,
-        "duration_minutes": duration_minutes,
         "received": received,
         "expected": expected,
         "lost": lost,
         "pdr_percent": round(pdr_percent, 2),
         "received_packet_ids": received_ids,
     }
+
