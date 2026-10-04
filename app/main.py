@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -54,7 +54,7 @@ def get_measurements():
 
         rows = cur.fetchall()
 
-    conn.close()
+    conn.close()    
 
     measurements = []
 
@@ -99,14 +99,19 @@ def create_measurement(measurement: MeasurementCreate):
             rssi=measurement.rssi,
             snr=measurement.snr
         )
-
+    
 @app.get("/measurements/pdr/{device_id}")
 def get_pdr(
     device_id: str,
     start: datetime,
-    end: datetime,
-    expected_packets: int
+    duration_minutes: int
 ):
+    # Calculate the experiment end time
+    end = start + timedelta(minutes=duration_minutes)
+
+    # TX2 sends once per minute
+    expected = duration_minutes
+
     conn = get_connection()
 
     with conn.cursor() as cur:
@@ -127,7 +132,7 @@ def get_pdr(
     received_ids = [row[0] for row in rows]
 
     received = len(received_ids)
-    expected = expected_packets
+
     lost = max(expected - received, 0)
 
     pdr_percent = (
@@ -140,6 +145,7 @@ def get_pdr(
         "device_id": device_id,
         "start": start,
         "end": end,
+        "duration_minutes": duration_minutes,
         "received": received,
         "expected": expected,
         "lost": lost,
