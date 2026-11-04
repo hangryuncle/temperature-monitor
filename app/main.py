@@ -98,51 +98,52 @@ def get_measurements():
 @app.post("/measurements", response_model=Measurement)
 def create_measurement(measurement: MeasurementCreate):
     conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO measurements (
+                    packet_id,
+                    device_id,
+                    timestamp,
+                    rx_timestamp,
+                    delay_milliseconds,
+                    temperature,
+                    humidity,
+                    rssi,
+                    snr
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                measurement.packet_id,
+                measurement.device_id,
+                measurement.timestamp,
+                measurement.rx_timestamp,
+                measurement.delay_milliseconds,
+                measurement.temperature,
+                measurement.humidity,
+                measurement.rssi,
+                measurement.snr
+            ))
 
-    with conn.cursor() as cur:
-        cur.execute("""
-            INSERT INTO measurements (
-                packet_id,
-                device_id,
-                timestamp,
-                rx_timestamp,
-                delay_milliseconds,
-                temperature,
-                humidity,
-                rssi,
-                snr
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id
-        """, (
-            measurement.packet_id,
-            measurement.device_id,
-            measurement.timestamp,
-            measurement.rx_timestamp,
-            measurement.delay_milliseconds,
-            measurement.temperature,
-            measurement.humidity,
-            measurement.rssi,
-            measurement.snr
-        ))
+            new_id = cur.fetchone()
 
-        new_id = cur.fetchone()[0]
-
-    conn.commit()
+        conn.commit()
     
-    return Measurement(
-        id=new_id[0],
-        packet_id=measurement.packet_id,
-        device_id=measurement.device_id,
-        timestamp=measurement.timestamp,
-        rx_timestamp=measurement.rx_timestamp,
-        delay_milliseconds=measurement.delay_milliseconds,
-        temperature=measurement.temperature,
-        humidity=measurement.humidity,
-        rssi=measurement.rssi,
-        snr=measurement.snr
-    )
-    conn.close()
+        return Measurement(
+            id=new_id[0],
+            packet_id=measurement.packet_id,
+            device_id=measurement.device_id,
+            timestamp=measurement.timestamp,
+            rx_timestamp=measurement.rx_timestamp,
+            delay_milliseconds=measurement.delay_milliseconds,
+            temperature=measurement.temperature,
+            humidity=measurement.humidity,
+            rssi=measurement.rssi,
+            snr=measurement.snr
+        )
+    finally:
+        conn.close()
 
 
 @app.get("/measurements/pdr/{device_id}")
@@ -193,5 +194,4 @@ def get_pdr(
         "pdr_percent": round(pdr_percent, 2),
         "received_packet_ids": received_ids,
     }
-    conn.close()
 
