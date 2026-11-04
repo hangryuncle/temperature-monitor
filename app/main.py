@@ -24,6 +24,8 @@ class Measurement(BaseModel):
     packet_id: int
     device_id: str
     timestamp: datetime
+    rx_timestamp: datetime | None = None
+    delay_milliseconds: int | None = None
     temperature: float
     humidity: float
     rssi: int | None = None
@@ -34,6 +36,8 @@ class MeasurementCreate(BaseModel):
     packet_id: int
     device_id: str
     timestamp: datetime
+    rx_timestamp: datetime | None = None
+    delay_milliseconds: int | None = None
     temperature: float
     humidity: float
     rssi: int | None = None
@@ -56,6 +60,8 @@ def get_measurements():
                 packet_id,
                 device_id,
                 timestamp,
+                rx_timestamp,
+                delay_milliseconds,
                 temperature,
                 humidity,
                 rssi,
@@ -77,10 +83,12 @@ def get_measurements():
                 packet_id=row[1],
                 device_id=row[2],
                 timestamp=row[3],
-                temperature=row[4],
-                humidity=row[5],
-                rssi=row[6],
-                snr=row[7]
+                rx_timestamp=row[4],
+                delay_milliseconds=row[5],
+                temperature=row[6],
+                humidity=row[7],
+                rssi=row[8],
+                snr=row[9]
             )
         )
 
@@ -97,38 +105,44 @@ def create_measurement(measurement: MeasurementCreate):
                 packet_id,
                 device_id,
                 timestamp,
+                rx_timestamp,
+                delay_milliseconds,
                 temperature,
                 humidity,
                 rssi,
                 snr
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """, (
             measurement.packet_id,
             measurement.device_id,
             measurement.timestamp,
+            measurement.rx_timestamp,
+            measurement.delay_milliseconds,
             measurement.temperature,
             measurement.humidity,
             measurement.rssi,
             measurement.snr
         ))
 
-        new_id = cur.fetchone()
+        new_id = cur.fetchone()[0]
 
     conn.commit()
-    conn.close()
-
+    
     return Measurement(
         id=new_id[0],
         packet_id=measurement.packet_id,
         device_id=measurement.device_id,
         timestamp=measurement.timestamp,
+        rx_timestamp=measurement.rx_timestamp,
+        delay_milliseconds=measurement.delay_milliseconds,
         temperature=measurement.temperature,
         humidity=measurement.humidity,
         rssi=measurement.rssi,
         snr=measurement.snr
     )
+    conn.close()
 
 
 @app.get("/measurements/pdr/{device_id}")
@@ -179,4 +193,5 @@ def get_pdr(
         "pdr_percent": round(pdr_percent, 2),
         "received_packet_ids": received_ids,
     }
+    conn.close()
 
