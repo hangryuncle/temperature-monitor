@@ -1,7 +1,7 @@
 
 from datetime import datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI,HTTPException
 from pydantic import BaseModel
 
 from app.database import get_connection
@@ -50,12 +50,26 @@ def home():
 
 
 @app.get("/measurements", response_model=list[Measurement])
-def get_measurements():
+def get_measurements(
+        start_time: datetime,
+        end_time: datetime,
+        device_id: str | None = None
+    ):
+    if start_time >= end_time:
+        raise HTTPException(
+            status_code=400,
+            detail="start_time must be less than end_time"
+        )
+    if start_time.tzinfo is None or end_time.tzinfo is None:
+        raise HTTPException(
+            status_code=400,
+            detail="start_time and end_time must be timezone-aware"
+        )
     conn = get_connection()
 
     with conn.cursor() as cur:
-        cur.execute("""
-            SELECT
+        query = """
+            SELECT  
                 id,
                 packet_id,
                 device_id,
@@ -67,32 +81,43 @@ def get_measurements():
                 rssi,
                 snr
             FROM measurements
-            ORDER BY timestamp DESC
-        """)
+            WHERE timestamp >= %s 
+                AND timestamp < %s
+        """
 
+        params = [start_time, end_time]
+
+        if device_id:
+            query += " AND device_id = %s"
+            params.append(device_id)
+
+        query += " ORDER BY timestamp ASC"
+
+        cur.execute(query, tuple(params))
         rows = cur.fetchall()
+        measurements = []
+
+        for row in rows:
+            measurements.append(
+                Measurement(
+                    id=row[0],
+                    packet_id=row[1],
+                    device_id=row[2],
+                    timestamp=row[3],
+                    rx_timestamp=row[4],
+                    delay_milliseconds=row[5],
+                    temperature=row[6],
+                    humidity=row[7],
+                    rssi=row[8],
+                    snr=row[9]
+                )
+            )
+            return measurements
+
 
     conn.close()
 
-    measurements = []
 
-    for row in rows:
-        measurements.append(
-            Measurement(
-                id=row[0],
-                packet_id=row[1],
-                device_id=row[2],
-                timestamp=row[3],
-                rx_timestamp=row[4],
-                delay_milliseconds=row[5],
-                temperature=row[6],
-                humidity=row[7],
-                rssi=row[8],
-                snr=row[9]
-            )
-        )
-
-    return measurements
 
 
 @app.post("/measurements", response_model=Measurement)
