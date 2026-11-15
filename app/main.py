@@ -72,62 +72,62 @@ def get_measurements(
                 detail="start_time and end_time must be timezone-aware"
         )
     conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            query = """
+                SELECT  
+                    id,
+                    packet_id,
+                    device_id,
+                    timestamp,
+                    rx_timestamp,
+                    delay_milliseconds,
+                    temperature,
+                    humidity,
+                    rssi,
+                    snr
+                FROM measurements
+                WHERE 1=1
+            """
 
-    with conn.cursor() as cur:
-        query = """
-            SELECT  
-                id,
-                packet_id,
-                device_id,
-                timestamp,
-                rx_timestamp,
-                delay_milliseconds,
-                temperature,
-                humidity,
-                rssi,
-                snr
-            FROM measurements
-            WHERE 1=1
-        """
+            params = []
 
-        params = []
+            if start_time is not None:
+                query += " AND timestamp >= %s"
+                params.append(start_time)
 
-        if start_time is not None:
-            query += " AND timestamp >= %s"
-            params.append(start_time)
+                query += " AND timestamp < %s"
+                params.append(end_time)
 
-            query += " AND timestamp < %s"
-            params.append(end_time)
+            if device_id:
+                query += " AND device_id = %s"
+                params.append(device_id)
 
-        if device_id:
-            query += " AND device_id = %s"
-            params.append(device_id)
+            query += " ORDER BY timestamp ASC"
 
-        query += " ORDER BY timestamp ASC"
+            cur.execute(query, tuple(params))
+            rows = cur.fetchall()
+            measurements = []
 
-        cur.execute(query, tuple(params))
-        rows = cur.fetchall()
-        measurements = []
-
-        for row in rows:
-            measurements.append(
-                Measurement(
-                    id=row[0],
-                    packet_id=row[1],
-                    device_id=row[2],
-                    timestamp=row[3],
-                    rx_timestamp=row[4],
-                    delay_milliseconds=row[5],
-                    temperature=row[6],
-                    humidity=row[7],
-                    rssi=row[8],
-                    snr=row[9]
+            for row in rows:
+                measurements.append(
+                    Measurement(
+                        id=row[0],
+                        packet_id=row[1],
+                        device_id=row[2],
+                        timestamp=row[3],
+                        rx_timestamp=row[4],
+                        delay_milliseconds=row[5],
+                        temperature=row[6],
+                        humidity=row[7],
+                        rssi=row[8],
+                        snr=row[9]
+                    )
                 )
-            )
             return measurements
 
-
-    conn.close()
+    finally:
+        conn.close()
 
 
 
