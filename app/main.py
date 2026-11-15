@@ -51,19 +51,25 @@ def home():
 
 @app.get("/measurements", response_model=list[Measurement])
 def get_measurements(
-        start_time: datetime,
-        end_time: datetime,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         device_id: str | None = None
     ):
-    if start_time >= end_time:
+    if (start_time is None) != (end_time is None):
         raise HTTPException(
             status_code=400,
-            detail="start_time must be less than end_time"
+            detail="Please provide both start_time and end_time"
         )
-    if start_time.tzinfo is None or end_time.tzinfo is None:
-        raise HTTPException(
-            status_code=400,
-            detail="start_time and end_time must be timezone-aware"
+    if start_time is not None and end_time is not None:
+        if start_time >= end_time:
+            raise HTTPException(
+                status_code=400,
+                detail="start_time must be less than end_time"
+            )
+        if start_time.tzinfo is None or end_time.tzinfo is None:
+            raise HTTPException(
+                status_code=400,
+                detail="start_time and end_time must be timezone-aware"
         )
     conn = get_connection()
 
@@ -81,11 +87,17 @@ def get_measurements(
                 rssi,
                 snr
             FROM measurements
-            WHERE timestamp >= %s 
-                AND timestamp < %s
+            WHERE 1=1
         """
 
-        params = [start_time, end_time]
+        params = []
+
+        if start_time is not NOne:
+            query += " AND timestamp >= %s"
+            params.append(start_time)
+
+            query += " AND timestamp < %s"
+            params.append(end_time)
 
         if device_id:
             query += " AND device_id = %s"
