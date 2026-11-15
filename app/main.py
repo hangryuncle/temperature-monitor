@@ -92,7 +92,7 @@ def get_measurements(
 
         params = []
 
-        if start_time is not NOne:
+        if start_time is not None:
             query += " AND timestamp >= %s"
             params.append(start_time)
 
