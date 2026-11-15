@@ -6,7 +6,9 @@ from pydantic import BaseModel
 
 from app.database import get_connection
 from fastapi.middleware.cors import CORSMiddleware
+from zoneinfo import ZoneInfo
 
+nepal_tz = ZoneInfo("Asia/Kathmandu")
 
 app = FastAPI()
 
@@ -134,6 +136,13 @@ def get_measurements(
 
 @app.post("/measurements", response_model=Measurement)
 def create_measurement(measurement: MeasurementCreate):
+    timestamp = measurement.timestamp
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=nepal_tz)
+
+    rx_timestamp = measurement.rx_timestamp
+    if rx_timestamp is not None and rx_timestamp.tzinfo is None:
+        rx_timestamp = rx_timestamp.replace(tzinfo=nepal_tz)
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -154,8 +163,8 @@ def create_measurement(measurement: MeasurementCreate):
             """, (
                 measurement.packet_id,
                 measurement.device_id,
-                measurement.timestamp,
-                measurement.rx_timestamp,
+                timestamp,
+                rx_timestamp,
                 measurement.delay_milliseconds,
                 measurement.temperature,
                 measurement.humidity,
@@ -171,8 +180,8 @@ def create_measurement(measurement: MeasurementCreate):
             id=new_id[0],
             packet_id=measurement.packet_id,
             device_id=measurement.device_id,
-            timestamp=measurement.timestamp,
-            rx_timestamp=measurement.rx_timestamp,
+            timestamp=timestamp,
+            rx_timestamp=rx_timestamp,
             delay_milliseconds=measurement.delay_milliseconds,
             temperature=measurement.temperature,
             humidity=measurement.humidity,
