@@ -105,7 +105,7 @@ def get_measurements(
                 query += " AND device_id = %s"
                 params.append(device_id)
 
-            query += " ORDER BY timestamp ASC"
+            query += " ORDER BY timestamp DESC"
 
             cur.execute(query, tuple(params))
             rows = cur.fetchall()
